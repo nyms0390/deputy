@@ -10,9 +10,10 @@ from PIL import Image
 from computer_use.adapters import build_text_reader
 from computer_use.desktop.ocr import Block, Line, OcrError
 from computer_use.desktop.paddleocr import CALLER, LAYOUT_PATH, TEXT_PATH, PaddleOcrReader
-from computer_use.tools.ocr import ocr_tools
+from computer_use.agent import coding_agent
+from computer_use.tools.ocr import MAX_PAGES, file_ocr_tools, ocr_tools
 
-from conftest import run_turn, tool_call, use_script
+from conftest import ScriptedModel, run_turn, tool_call, use_script
 
 TEXT_PAGE = {"res": {
     "rec_texts": ["Invoice 1042", "Total 1,234.50"],
@@ -159,4 +160,79 @@ async def test_a_task_has_the_ocr_tools_only_with_a_reader(settings, computer, m
         return {tool.name for tool in model.bindings[0]["tools"]}
 
     assert {"read_text", "read_layout"} <= await offered(ocr=FakeReader())
+    assert not {"read_text", "read_layout"} & await offered()
+
+
+def pdf(pages: int) -> bytes:
+    """A PDF of blank 300x200 pages, as a scanner without a text layer makes them."""
+    images = [Image.new("RGB", (300, 200), "white") for _ in range(pages)]
+    buffer = io.BytesIO()
+    images[0].save(buffer, format="PDF", save_all=True, append_images=images[1:], resolution=72)
+    return buffer.getvalue()
+
+
+def png(size=(40, 30)) -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", size, "white").save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def file_tools(code_runner, reader):
+    read_text, read_layout = file_ocr_tools(code_runner, "thread", reader)
+    return read_text, read_layout
+
+
+async def test_read_text_reads_each_page_of_a_scanned_pdf_rendered_at_144_dpi(code_runner):
+    code_runner.files["attachments/scan.pdf"] = pdf(2)
+    reader = FakeReader(lines=[Line("Invoice 1042", (0, 0, 9, 9), 0.99), Line("1,234.50", (0, 0, 9, 9), 0.5)])
+    read_text, _ = file_tools(code_runner, reader)
+    result = await call(read_text, path="attachments/scan.pdf")
+    assert [image.size for image in reader.given] == [(600, 400), (600, 400)]
+    page = "Invoice 1042\n1,234.50 (unsure)"
+    assert result.content == f"Page 1:\n{page}\n\nPage 2:\n{page}"
+
+
+async def test_read_layout_reads_the_pages_asked_for_or_an_image(code_runner):
+    code_runner.files["scan.pdf"] = pdf(3)
+    code_runner.files["photo.png"] = png()
+    reader = FakeReader(blocks=[Block("table", "<table></table>", None)])
+    _, read_layout = file_tools(code_runner, reader)
+    assert (await call(read_layout, path="scan.pdf", pages=[3])).content == "Page 3:\n[table]\n<table></table>"
+    assert (await call(read_layout, path="photo.png")).content == "photo.png:\n[table]\n<table></table>"
+    assert reader.given[-1].size == (40, 30)
+
+
+@pytest.mark.parametrize("path, pages, says", [
+    ("missing.pdf", None, "there is no missing.pdf in your working folder"),
+    ("long.pdf", None, f"has {MAX_PAGES + 2} pages; ask for at most {MAX_PAGES}"),
+    ("long.pdf", [MAX_PAGES + 3], f"has {MAX_PAGES + 2} pages, not page {MAX_PAGES + 3}"),
+    ("photo.png", [2], "an image, which has only page 1"),
+    ("notes.txt", None, "neither a PDF nor an image"),
+])
+async def test_a_file_that_cannot_be_read_is_refused_before_ocr(code_runner, path, pages, says):
+    code_runner.files.update({"long.pdf": pdf(MAX_PAGES + 2), "photo.png": png(), "notes.txt": "plain text"})
+    reader = FakeReader()
+    read_text, _ = file_tools(code_runner, reader)
+    result = await call(read_text, path=path, **({"pages": pages} if pages else {}))
+    assert result.status == "error" and says in result.content and reader.given == []
+
+
+async def test_an_ocr_failure_on_a_page_is_the_agents_to_hear(code_runner):
+    code_runner.files["scan.pdf"] = pdf(1)
+    read_text, _ = file_tools(code_runner, FakeReader(fail="the OCR service is busy or its model is not loaded (HTTP 503)"))
+    result = await call(read_text, path="scan.pdf")
+    assert result.status == "error" and result.content.startswith("OCR failed on Page 1: the OCR service is busy")
+
+
+async def test_a_coding_task_has_the_ocr_tools_only_with_a_reader(settings, computer, code_runner, monkeypatch):
+    async def offered(**reader) -> set[str]:
+        handing = AIMessage(content="", tool_calls=[
+            tool_call("m1", "start_task", agent="coding", title="Task", task="Read the scan.")])
+        use_script(monkeypatch, [], main=[handing, AIMessage("Done.")])
+        model = ScriptedModel(messages=iter([AIMessage("Read.")]), received=[], bindings=[])
+        monkeypatch.setattr(coding_agent, "build_chat_model", lambda _spec, _settings: model)
+        await run_turn(settings, "read my scan", max_steps=5, computer=computer, code_runner=code_runner, **reader)
+        return {tool.name for tool in model.bindings[0]["tools"]}
+
+    assert {"bash", "read_text", "read_layout"} <= await offered(ocr=FakeReader())
     assert not {"read_text", "read_layout"} & await offered()

@@ -133,7 +133,9 @@ async def run_turn(
         if code_runner is not None:
             attached = Attached(code_runner, store, thread, earlier.logs,
                                 [each for each in media if "filename" in each], log.run)
-            agents[CodingAgent] = lambda task, taught: CodingAgent(context, task, taught, code_runner, attached)
+            agents[CodingAgent] = lambda task, taught: CodingAgent(
+                context, task, taught, code_runner, attached, ocr,
+            )
         # A message that continues a conversation is in the conversation's project, as its first turn says.
         if earlier.logs:
             project = earlier.project

@@ -8,8 +8,10 @@ from computer_use.middleware.subagent import SubagentMiddleware
 from computer_use.agent.models import build_chat_model, chosen
 from computer_use.agent.subagent import Result, Subagent, TaskContext
 from computer_use.agent.trajectory import Trajectory
+from computer_use.desktop.ocr import TextReader
 from computer_use.sandbox import CodeRunner, CodeRunnerError
 from computer_use.tools.coding import Attached, coding_tools
+from computer_use.tools.ocr import file_ocr_tools
 from computer_use.prompts.coding import ABOUT, CODING_PROMPT, working_folder, runner_unusable, stopped
 
 
@@ -20,9 +22,10 @@ class CodingAgent(Subagent):
     name = "coding agent"
     about = ABOUT
 
-    def __init__(self, context: TaskContext, log: Trajectory, taught: str, runner: CodeRunner, attached: Attached):
+    def __init__(self, context: TaskContext, log: Trajectory, taught: str, runner: CodeRunner, attached: Attached,
+                 ocr: TextReader | None = None):
         super().__init__(context, log, taught)
-        self.runner, self.attached = runner, attached
+        self.runner, self.attached, self.ocr = runner, attached, ocr
 
     async def run(self, task: str, told: Inbox) -> Result:
         reason = ""
@@ -36,9 +39,12 @@ class CodingAgent(Subagent):
             await self.log.input(start, "task")
             choice = chosen(self.context.settings, self.agent, self.context.choices.agents)
             self.log.uses(choice.model, name=self.agent)
+            tools = coding_tools(self.runner, self.context.thread, self.log.run)
+            if self.ocr is not None:  # the runner has no network: the runtime reads its files for it
+                tools += file_ocr_tools(self.runner, self.context.thread, self.ocr)
             reply = await self.invoke(
                 build_chat_model(choice, self.context.settings),
-                coding_tools(self.runner, self.context.thread, self.log.run),
+                tools,
                 CODING_PROMPT, SubagentMiddleware(self.log, told), start, middleware=[SkillsMiddleware(self.agent)],
             )
         except CodeRunnerError as error:

@@ -1,20 +1,32 @@
-"""Model-facing OCR of the desktop: exact text lines, and layout, read off the screen by a text reader."""
+"""Model-facing OCR through a text reader: exact text lines and layout, read off the desktop for the computer agent,
+and off scanned PDFs and images in the working folder for the coding agent."""
 
 import asyncio
+import io
 import json
 from collections.abc import Awaitable, Callable, Sequence
 
 from langchain_core.messages import ToolMessage
-from langchain_core.tools import BaseTool, tool
+from typing import Annotated
+
+import pypdfium2
+from langchain_core.tools import BaseTool, ToolException, tool
+from PIL import Image
+from pydantic import Field
 
 from computer_use.computers import ComputerError, Frame
 from computer_use.desktop.executor import ActionResult, Executor
 from computer_use.desktop.ocr import Block, Box, Line, OcrError, TextReader
+from computer_use.sandbox import CodeRunner
 from computer_use.tools.common import CallId
 from computer_use.tools.desktop import RegionArg, reply
 
 # Lines the text model scored below this are marked, so the model checks them before relying on their characters.
 UNSURE = 0.9
+# Pages of a file read in one call: the service reads one page at a time, a scanned page in a second or more.
+MAX_PAGES = 10
+# A PDF page is rendered at this many times 72 dpi: 144 dpi, which reads small print and keeps an A4 page under 2 MP.
+PDF_SCALE = 2
 
 
 def ocr_tools(executor: Executor, reader: TextReader) -> list[BaseTool]:
@@ -98,3 +110,100 @@ def layout_report(blocks: list[Block], region: Box) -> str:
         rows.append(f"{number}. [{block.label}{box}]\n{block.text}")
     head = f"{len(blocks)} blocks in reading order in {_where(region)}; boxes in full-screen screenshot pixels."
     return "\n".join([head, *rows])
+
+
+PagesArg = Annotated[list[int] | None, Field(
+    description=f"1-based page numbers of a PDF, at most {MAX_PAGES}; omit for every page of a shorter PDF or an image",
+)]
+
+
+def file_ocr_tools(runner: CodeRunner, thread: str, reader: TextReader) -> list[BaseTool]:
+    """read_text and read_layout of PDF pages and images in the conversation's folder on the code runner."""
+
+    async def read[T](path: str, pages: list[int] | None, recognize: Callable[[bytes], Awaitable[list[T]]],
+                      render: Callable[[list[T]], str]) -> str:
+        try:
+            data = await runner.read(thread, path)
+        except FileNotFoundError:
+            raise ToolException(f"Not executed: there is no {path} in your working folder.")
+        except ValueError as refused:
+            raise ToolException(f"Not executed: {refused}.")
+        images = await asyncio.to_thread(page_images, path, data, pages)
+        parts = []
+        for number, png in images:
+            try:
+                found = await recognize(png)
+            except OcrError as error:
+                raise ToolException(f"OCR failed on {number}: {error}.")
+            parts.append(f"{number}:\n{render(found)}")
+        return "\n\n".join(parts)
+
+    @tool
+    async def read_text(
+        path: Annotated[str, Field(description="A PDF or image in your working folder.")], pages: PagesArg = None,
+    ) -> str:
+        """Read the text of PDF pages or an image in your working folder with an OCR model, line by line.
+
+        Use it for scanned pages and pictures of text, where extracting a PDF's text gives nothing or garbage. Lines
+        marked unsure scored low, so check them, such as with view_image, before relying on their characters.
+        """
+        return await read(path, pages, reader.lines, page_text)
+
+    @tool
+    async def read_layout(
+        path: Annotated[str, Field(description="A PDF or image in your working folder.")], pages: PagesArg = None,
+    ) -> str:
+        """Read the layout of PDF pages or an image in your working folder with a document model: titles,
+        paragraphs and tables (tables as HTML) in reading order.
+
+        Use it for scanned tables and documents whose structure matters; use read_text for the exact characters of a
+        value. Slower than read_text.
+        """
+        return await read(path, pages, reader.blocks, page_layout)
+
+    tools = [read_text, read_layout]
+    for each in tools:
+        each.handle_tool_error = True
+    return tools
+
+
+def page_images(path: str, data: bytes, pages: list[int] | None) -> list[tuple[str, bytes]]:
+    """Each page asked for as a PNG, with its name: the pages of a PDF, or an image as its one page."""
+    if not data.startswith(b"%PDF-"):
+        if pages and pages != [1]:
+            raise ToolException(f"Not executed: {path} is an image, which has only page 1.")
+        try:
+            with Image.open(io.BytesIO(data)) as image:
+                return [(path, Frame.encode(image.convert("RGB")).png)]
+        except (OSError, Image.DecompressionBombError):
+            raise ToolException(f"Not executed: {path} is neither a PDF nor an image Pillow opens.") from None
+    try:
+        document = pypdfium2.PdfDocument(data)
+    except pypdfium2.PdfiumError as error:
+        raise ToolException(f"Not executed: {path} does not open as a PDF ({error}).") from None
+    try:
+        count = len(document)
+        wanted = pages or list(range(1, count + 1))
+        if len(wanted) > MAX_PAGES:
+            raise ToolException(
+                f"Not executed: {path} has {count} pages; ask for at most {MAX_PAGES} at a time with pages.")
+        if missing := [number for number in wanted if not 1 <= number <= count]:
+            raise ToolException(f"Not executed: {path} has {count} pages, not page {missing[0]}.")
+        return [
+            (f"Page {number}", Frame.encode(document[number - 1].render(scale=PDF_SCALE).to_pil().convert("RGB")).png)
+            for number in wanted
+        ]
+    finally:
+        document.close()
+
+
+def page_text(lines: list[Line]) -> str:
+    if not lines:
+        return "No text found."
+    return "\n".join(f"{line.text} (unsure)" if line.score < UNSURE else line.text for line in lines)
+
+
+def page_layout(blocks: list[Block]) -> str:
+    if not blocks:
+        return "No layout found."
+    return "\n".join(f"[{block.label}]\n{block.text}" for block in blocks)
