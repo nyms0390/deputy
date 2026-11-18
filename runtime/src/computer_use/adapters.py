@@ -44,7 +44,7 @@ def build_screen_judge(settings: Settings) -> ScreenJudge | None:
 
 
 def build_text_reader(settings: Settings) -> TextReader | None:
-    """The OCR service, or None: read_text and read_layout are then not offered."""
+    """The OCR service, or None: the ocr tools are then not offered."""
     return PaddleOcrReader(settings.ocr_url) if settings.ocr_url else None
 
 

@@ -1,7 +1,7 @@
 """Text reader contract: the text on a screenshot, read by an OCR service rather than the agent's model.
 
 PaddleOcrReader (desktop.paddleocr) is the HTTP adapter; adapters.build_text_reader picks it, or none. Without a
-reader, read_text and read_layout are not offered. Boxes are pixels of the image the reader was given."""
+reader, the ocr tools are not offered. Boxes are pixels of the image the reader was given."""
 
 from dataclasses import dataclass
 from typing import Protocol
