@@ -31,6 +31,7 @@ services:
       - CU_COMPUTER_MODEL
       - CU_COMPUTER_EFFORT
       - CU_TITLE_MODEL
+      - CU_OCR_URL
       - OPENAI_API_KEY
       - ANTHROPIC_API_KEY
       - LANGSMITH_TRACING

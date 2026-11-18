@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     windows_tools_path: str | None = Field(default=None, validation_alias="WINDOWS_TOOLS_PATH")
     windows_tools_token: SecretStr | None = Field(default=None, validation_alias="WINDOWS_TOOLS_TOKEN")
 
+    # A PaddleOCR inference server for the desktop agent's read_text and read_layout, e.g. "http://ocr-host:8080";
+    # neither is offered when unset.
+    ocr_url: str | None = None
+
     web_url: str = "http://localhost:5173"
     # A TURN server the browser relays the live view through when it cannot reach the runtime's own addresses,
     # as from the Mac into a Docker container, e.g. "turn:localhost:3478?transport=tcp".

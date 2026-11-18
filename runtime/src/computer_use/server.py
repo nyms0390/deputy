@@ -29,7 +29,7 @@ from computer_use.agent.models import MAIN_AGENT, efforts, offered, starting
 from computer_use.agent.title import MAX_CHARS, Titles, title_model
 from computer_use.adapters import (
     build_code_runner, build_computer, build_control, build_file_store, build_screen_judge, build_stores,
-    build_windows_tools,
+    build_text_reader, build_windows_tools,
 )
 from computer_use.computers import Computer
 from computer_use.config import APPROVALS, FOLLOW, RunChoices, Settings
@@ -101,7 +101,7 @@ def create_app(settings: Settings, max_steps: int, computer: Computer | None = N
     windows = build_windows_tools(settings, control, computer)
     start_turn = partial(
         run_turn, settings, computer=computer, control=control, code_runner=code_runner, memory=memory,
-        judge=build_screen_judge(settings), windows=windows,
+        judge=build_screen_judge(settings), windows=windows, ocr=build_text_reader(settings),
     )
     runner = Runner(store, start_turn, Titles(settings))
     run_lock = RunLock(settings.run_lock_path)

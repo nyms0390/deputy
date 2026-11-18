@@ -85,6 +85,7 @@ CU_TEST_MONGO_URL="mongodb://localhost:27017/?replicaSet=rs0" uv run pytest -m m
 
 - **Agents.** The main agent answers, or hands work to background tasks (up to six, one on the desktop): `computer` operates Windows by mouse and keyboard, `coding` runs code in the code runner, a container with no network or access to Windows.
 - **Windows Tools** (optional). The desktop agent can also run PowerShell on Windows with `run_command`; the runtime starts the host there by itself before a desktop task.
+- **OCR** (optional). With `CU_OCR_URL` naming a PaddleOCR inference server, the desktop agent can also read the screen's exact text with `read_text` and its tables and layout with `read_layout`.
 - **Takeover.** The user can take the desktop from the web live view or `computer-use takeover`; the agent asks for it for passwords, CAPTCHAs, administrator prompts and payments.
 - **Approvals.** A flagged step waits for the user's approval; **Settings → Permissions** can send it to an auto reviewer first.
 - **Models.** Defaults come from `.env` (`CU_MAIN_MODEL`, `CU_COMPUTER_MODEL`); **Settings → Model** overrides them.

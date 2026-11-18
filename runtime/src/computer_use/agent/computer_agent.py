@@ -17,6 +17,7 @@ from computer_use.config import Approvals
 from computer_use.desktop.control import ApprovalFile, Control, DesktopBusy, RunLock, release_input
 from computer_use.desktop.executor import ActionResult, Executor
 from computer_use.desktop.judge import ScreenJudge
+from computer_use.desktop.ocr import TextReader
 from computer_use.middleware.approvals import MAX_DECLINES, Confirmations
 from computer_use.middleware.chat import Mention
 from computer_use.middleware.desktop import DesktopMiddleware
@@ -33,6 +34,7 @@ from computer_use.storage import MAIN
 from computer_use.tools.common import image_block
 from computer_use.tools.desktop import content, desktop_tools, takeover_tool
 from computer_use.tools.native import command_tools
+from computer_use.tools.ocr import ocr_tools
 
 
 def text_entry_screens(events: Iterable[dict], limit: int = 2) -> list[tuple[int, str]]:
@@ -85,12 +87,14 @@ class ComputerAgent(Subagent):
         approvals: Callable[[], Approvals],
         judge: ScreenJudge | None = None,
         windows: WindowsTools | None = None,
+        ocr: TextReader | None = None,
     ):
         super().__init__(context, log, taught)
         self.computer = computer
         self.control = control
         self.judge = judge
         self.windows = windows if context.choices.commands else None
+        self.ocr = ocr
         # Read per step, so a change the user makes mid-run applies.
         self.approvals = approvals
 
@@ -170,11 +174,12 @@ class ComputerAgent(Subagent):
         confirm = Confirmations(ApprovalFile(settings.approval_path), self.control, executor, self.log, review,
                                 lambda: self.approvals() == "auto")
         commands = command_tools(Commands(self.windows, executor)) if self.windows else []
+        reading = ocr_tools(executor, self.ocr) if self.ocr else []
 
         def announce(reason: str) -> None:
             self.log.note(f"Agent requests a takeover: {reason}\nOpen {settings.web_url}", "takeoverRequested")
 
-        tools = [*desktop_tools(executor), *commands, takeover_tool(self.control, self.computer, announce)]
+        tools = [*desktop_tools(executor), *commands, *reading, takeover_tool(self.control, self.computer, announce)]
         return tools, DesktopMiddleware(executor, self.control, self.log, settings.web_url, confirm, told)
 
     async def _after(self, executor: Executor) -> ActionResult:

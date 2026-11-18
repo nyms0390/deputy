@@ -28,6 +28,7 @@ from computer_use.computers import Computer
 from computer_use.config import Approvals, RunChoices, Settings
 from computer_use.desktop.control import Control, RunLock, hand_over
 from computer_use.desktop.judge import ScreenJudge
+from computer_use.desktop.ocr import TextReader
 from computer_use.native.lease import WindowsTools
 from computer_use.memory import MemoryStore
 from computer_use.middleware.memory import UserMemory
@@ -75,6 +76,7 @@ async def run_turn(
     code_runner: CodeRunner | None = None,
     judge: ScreenJudge | None = None,
     windows: WindowsTools | None = None,
+    ocr: TextReader | None = None,
     choices: RunChoices = RunChoices(),
     titles: title.Titles | None = None,
     approvals: Callable[[], Approvals] | None = None,
@@ -123,7 +125,7 @@ async def run_turn(
         )
         agents: dict[type[Subagent], MakeAgent] = {
             ComputerAgent: lambda task, taught: ComputerAgent(
-                context, task, taught, computer, control, approvals, judge, windows,
+                context, task, taught, computer, control, approvals, judge, windows, ocr,
             ),
         }
         # Offered while the runner is down too: a task then fails at once, saying so, rather than going to the desktop.
