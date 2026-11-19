@@ -35,8 +35,9 @@ class CodingAgent(Subagent):
             await self.attached.place()
             opening = self.opening(task, await self.context.blackboard.read(self.task_id))
             folder = f"/workspace/{self.context.thread}"
-            start = self._start = HumanMessage(content=f"{opening}\n\n{working_folder(folder)}")
+            start = HumanMessage(content=f"{opening}\n\n{working_folder(folder)}")
             await self.log.input(start, "task")
+            self._start = start
             choice = chosen(self.context.settings, self.agent, self.context.choices.agents)
             self.log.uses(choice.model, name=self.agent)
             tools = coding_tools(self.runner, self.context.thread, self.log.run)
