@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # The Windows Tools host as one URL (README: Windows machine); commands on Windows are off without one.
     windows_tools_url: SecretStr | None = Field(default=None, validation_alias="WINDOWS_TOOLS_URL")
 
+    # A PaddleOCR inference server for the ocr tool, of the screen (computer agent) and of scanned files and pictures
+    # (coding agent), e.g. "http://ocr-host:8080"; not offered when unset.
+    ocr_url: str | None = None
+
     web_url: str = "http://localhost:5173"
     # A TURN server the browser relays the live view through when it cannot reach the runtime's own addresses,
     # as from the Mac into a Docker container, e.g. "turn:localhost:3478?transport=tcp".

@@ -7,6 +7,8 @@ from computer_use.config import Settings
 from computer_use.desktop.control import ControlFile
 from computer_use.desktop.decisions import DecisionsJudge
 from computer_use.desktop.judge import ScreenJudge
+from computer_use.desktop.ocr import TextReader
+from computer_use.desktop.paddleocr import PaddleOcrReader
 from computer_use.files import FileStore
 from computer_use.files.local import LocalFileStore
 from computer_use.memory import MemoryStore
@@ -38,6 +40,11 @@ def build_screen_judge(settings: Settings) -> ScreenJudge | None:
     """The screen judge, or None: press_while is then not offered."""
     key = settings.openai_api_key
     return DecisionsJudge(key.get_secret_value()) if key else None
+
+
+def build_text_reader(settings: Settings) -> TextReader | None:
+    """The OCR service, or None: the ocr tools are then not offered."""
+    return PaddleOcrReader(settings.ocr_url) if settings.ocr_url else None
 
 
 def build_windows_tools(settings: Settings, control: ControlFile) -> Lease | None:

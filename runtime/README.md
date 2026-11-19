@@ -21,6 +21,7 @@ The API server and the agents reach everything outside the runtime through six i
 
 - **Agents.** The main agent answers, or starts background tasks (up to six, one on the desktop): `computer` uses the mouse and keyboard, `coding` runs code in the code runner, which has no network and no access to Windows.
 - **Windows Tools** (optional). The desktop agent can also run PowerShell with `run_command`. A running command stops when the user takes the desktop.
+- **OCR** (optional). With `CU_OCR_URL` naming a PaddleOCR inference server, the desktop agent and the coding agent each get an `ocr` tool, reading exact text or layout (tables, reading order): the desktop agent's off the screen, the coding agent's off PDF pages, images and the pictures in Word, Excel and PowerPoint files in its folder (the runtime reads them for it, since the code runner has no network).
 - **Takeover.** The user takes the desktop from the web live view or `computer-use takeover`; the agent asks for it for passwords, CAPTCHAs, administrator prompts and payments.
 - **Approvals.** A step the agent flags waits for the user's approval; **Settings → Permissions** can send it to an auto reviewer first.
 - **Models.** Defaults come from `.env` (`CU_MAIN_MODEL`, `CU_COMPUTER_MODEL`); **Settings → Model** overrides them.
