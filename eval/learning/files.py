@@ -31,7 +31,10 @@ def package(main: str, kinds: dict[str, str], parts: dict[str, str]) -> bytes:
     data = io.BytesIO()
     with zipfile.ZipFile(data, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, text in listed.items():
-            archive.writestr(name, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' + text)
+            # A fixed date, so the same parts are the same file whenever it is written.
+            entry = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
+            entry.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(entry, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' + text)
     return data.getvalue()
 
 

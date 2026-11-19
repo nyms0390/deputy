@@ -16,9 +16,10 @@ import uuid
 from collections.abc import Callable
 from pathlib import Path
 
-from computer_use_cli.client import ApiError, Client, Follow
-
 import eval as desktop
+
+# The CLI's API client, which the eval puts on the path.
+ApiError, Client, Follow = desktop.ApiError, desktop.Client, desktop.Follow
 
 SKILLS = desktop.RUNTIME / "data" / "learning"  # the folders servers were given, a new one each
 CONTAINER_SKILLS = "/app/data/learning"  # the same folder as the container has it
