@@ -22,3 +22,6 @@ docs/
 
 # Local Claude Code preview config
 .claude/launch.json
+
+# Company root certificates (certs/README.md)
+certs/*.crt
