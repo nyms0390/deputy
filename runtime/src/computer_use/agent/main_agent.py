@@ -7,6 +7,7 @@ import contextlib
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from functools import partial
+from pathlib import Path
 
 from langchain.agents import create_agent
 from langchain_core.language_models import BaseChatModel
@@ -36,19 +37,22 @@ from computer_use.prompts.main import MAIN_PROMPT
 from computer_use.sandbox import CodeRunner, CodeRunnerError
 from computer_use.tools.coding import Attached
 from computer_use.storage import Runs
+from computer_use.tools.skills import UserSkills
+from computer_use.userskills import Proposals
 from computer_use.streaming import Draft
 
 # The agents the main agent may hand work to with start_task.
 SUBAGENTS: tuple[type[Subagent], ...] = (ComputerAgent, CodingAgent)
 
 
-def main_agent(model: BaseChatModel, tools: Sequence, middleware: Sequence):
-    """The main agent for one turn: its model, its tools and what runs around its calls, after its skills."""
+def main_agent(model: BaseChatModel, tools: Sequence, middleware: Sequence, skills: UserSkills | None = None):
+    """The main agent for one turn: its model, its tools and what runs around its calls, after its skills, the
+    user's own read as the turn begins."""
     return create_agent(
         model,
         tools,
         system_prompt=MAIN_PROMPT,
-        middleware=[SkillsMiddleware(MAIN_AGENT), *middleware],
+        middleware=[SkillsMiddleware(MAIN_AGENT, user=skills.listed() if skills is not None else ()), *middleware],
     )
 
 
@@ -84,6 +88,7 @@ async def run_turn(
     sent: float | None = None,
     media: Sequence[dict] = (),
     kept: Callable[[], Awaitable[None]] | None = None,
+    skills: Path | None = None,
 ) -> TurnResult:
     """Answer a message, continuing `thread` when given; the run belongs to the store's user, in `project` when it
     begins a conversation there.
@@ -91,7 +96,8 @@ async def run_turn(
     Raises ValueError if the thread cannot be continued, and DesktopBusy if force_computer finds the RunLock held. take_control transfers ownership only after the lock is acquired. Failure or
     cancellation stops the tasks and closes the log with usage, then raises.
 
-    `max_steps` limits each task. `choices` fixes the models for the session; `approvals` is read for each step."""
+    `max_steps` limits each task. `choices` fixes the models for the session; `approvals` is read for each step.
+    `skills` is the folder of the user's own skills for this run, by default theirs in the settings."""
     configure_tracing()
     earlier = await take_up(store, thread) if thread is not None else Earlier()
     main = chosen(settings, MAIN_AGENT, choices.agents)  # the main agent's, for the whole session
@@ -148,12 +154,13 @@ async def run_turn(
                 with contextlib.suppress(CodeRunnerError):  # left for a coding task, which says the runner is down
                     await attached.put_new()
 
+        own = UserSkills(skills or settings.skills_folder(store.user), Proposals(settings.proposals_folder(store.user)))
         session = Session(
-            partial(main_agent, build_chat_model(main, settings, stream=True)), first=log, thread=thread,
+            partial(main_agent, build_chat_model(main, settings, stream=True), skills=own), first=log, thread=thread,
             agents=agents, resources={ComputerAgent.agent: DesktopResource(computer, lock)}, mention=MENTION,
             inbox=inbox, draft=draft, choices=choices,
             models=(computer_model, main.model), memory=remembering, project=project,
-            watch=settings.web_url, background=background, blackboard=blackboard,
+            watch=settings.web_url, background=background, blackboard=blackboard, skills=own,
         )
         if opened is not None:  # the caller's hold on it, to stop its turn or a task on its own
             opened(session)

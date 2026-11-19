@@ -70,6 +70,12 @@ RENDERS = [
     (memory.recalled, (RULES,)),
     (memory.handed, (RULES,)),
     (skills.section, ([("windows", "Starting apps on Windows.")],)),
+    (skills.handed, ([("invoices", "Enter the total last.")],)),
+    (skills.no_skill, (["invoice"], ["invoices"])),
+    (skills.declined, ("Too narrow.",)),
+    (skills.declined, ("",)),
+    (skills.consequence, ("invoices", "Entering invoices.", True, 0)),
+    (skills.consequence, ("invoices", "Entering invoices.", False, 2)),
 ]
 
 

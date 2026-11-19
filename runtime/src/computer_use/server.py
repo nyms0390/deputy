@@ -34,7 +34,7 @@ from computer_use.adapters import (
 )
 from computer_use.computers import Computer
 from computer_use.config import APPROVALS, FOLLOW, RunChoices, Settings
-from computer_use.desktop.control import ApprovalFile, ControlSyncError, DesktopBusy, RunLock
+from computer_use.desktop.control import Approval, ApprovalFile, ControlSyncError, DesktopBusy, RunLock
 from computer_use.desktop.routes import desktop_routes
 from computer_use.desktop.webrtc import ScreenShare
 from computer_use.agent.history import can_continue
@@ -47,6 +47,7 @@ from computer_use.storage import (
     ALL, HITS, MAX_PAGE, PAGE, TURN, Runs, RunSummary, cursor_of, page_limit,
 )
 from computer_use.tools.common import MEDIA_TYPES
+from computer_use.userskills import Proposals
 
 RUN_ID = re.compile(r"[\w-]+")
 # A run's files by extension: screenshots and what the user attached.
@@ -195,9 +196,15 @@ def create_app(settings: Settings, max_steps: int, computer: Computer | None = N
             raise HTTPException(404, "no such project")
         return id
 
-    async def awaiting(request: Request):
+    async def awaiting(request: Request) -> tuple[ApprovalFile, Approval] | None:
+        """The step the asker may answer, and where it waits: the desktop's, if its run is theirs, else the oldest
+        skill proposal of a turn of theirs under way."""
         pending = asked.pending(run := active())
-        return pending if pending is not None and await owned(mine(request), run) else None
+        if pending is not None and await owned(mine(request), run):
+            return asked, pending
+        turns = {session["turn"] for session in running(me(request)) if session["turn"]}
+        waiting = Proposals(settings.proposals_folder(me(request))).waiting(turns) if turns else []
+        return waiting[0] if waiting else None
 
     def choices_of(data: dict) -> RunChoices:
         """The user's choices sent with a message. A model or effort no longer offered, or an agent the runtime no
@@ -265,7 +272,7 @@ def create_app(settings: Settings, max_steps: int, computer: Computer | None = N
                 if runner.error and runner.error["user"] == me(request) else None
             ),
             "control": asdict(control.read()),
-            "approval": asdict(pending) if (pending := await awaiting(request)) else None,
+            "approval": asdict(pending[1]) if (pending := await awaiting(request)) else None,
             "computer": {"connected": connected, "detail": detail},
             "code_runner": asdict(await code_runner.status()) if code_runner else None,
             "windows_tools": asdict(await windows.status()) if windows else None,  # None when no host is set
@@ -638,7 +645,7 @@ def create_app(settings: Settings, max_steps: int, computer: Computer | None = N
         routes=[
             *authenticator.routes,
             *memory_routes(memory, me),
-            *desktop_routes(computer, control, share, asked, awaiting),
+            *desktop_routes(computer, control, share, awaiting),
             Route("/api/session", session),
             Route("/api/status", status),
             Route("/api/conversations", list_conversations),

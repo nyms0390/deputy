@@ -34,6 +34,7 @@ services:
       - LANGSMITH_API_KEY
       - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-computer-use}
       - CU_DATA_DIR=/app/data
+      - CU_SKILLS_DIR  # as the container sees it, under /app/data
       - CU_TURN_URL=${CU_TURN_URL:-turn:localhost:3478?transport=tcp}  # as the browser sees it
       - CU_WEB_URL=${CU_WEB_URL:-http://localhost:8080}  # the web service's page, as the browser sees it
       - CU_CODE_RUNNER_URL=unix:///run/code-runner/runner.sock

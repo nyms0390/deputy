@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, Huma
 from langgraph.graph.state import CompiledStateGraph
 
 from computer_use.agent.background import USER, Background, Job, Resource, runtime_message
-from computer_use.agent.handover import SessionMemory, task_tool
+from computer_use.agent.handover import SessionMemory, SessionSkills, task_tool
 from computer_use.agent.blackboard import Blackboard
 from computer_use.agent.history import Earlier, load_conversation
 from computer_use.agent.inbox import Inbox
@@ -110,10 +110,12 @@ class Session:
         resources: dict[str, Resource], mention: Mention | None,
         inbox: Inbox, draft: Draft, choices: RunChoices, models: tuple[str, str], memory: SessionMemory | None,
         project: str | None, watch: str, background: Background, blackboard: Blackboard,
+        skills: SessionSkills | None = None,
     ):
         self.main_agent, self.thread, self.agents, self.watch = main_agent, thread, agents, watch
         self.resources, self.mention, self.inbox, self.draft = resources, mention, inbox, draft
         self.choices, self.models, self.memory, self.project = choices, models, memory, project
+        self.skills = skills  # the user's own, which the main agent lists, hands over and proposes
         self.id, self.first = first.run, first
         self.log: Trajectory | None = first  # the turn under way
         self.turns = [first.run]
@@ -184,18 +186,20 @@ class Session:
             await log.input(asked, "mention-asked", MAIN)
         rules = await self.memory.recall() if self.memory is not None else False
         tasks = [task_tool(kind, make, self.background, self.inbox, self.current, self.id, self.thread, self.memory,
-                           self.resources.get(kind.agent)) for kind, make in self.agents.items()]
+                           self.resources.get(kind.agent), self.skills) for kind, make in self.agents.items()]
         self.handing = {each.agent: each for each in tasks}
         self.tools = [*handover_tools(tasks, self.background, self.inbox, with_rules=rules),
                       plan_tool(self.blackboard.plan, self.plan_written), ask_user,
                       *conversation_tools(log.store, self.thread)]
+        if self.skills is not None:
+            self.tools += self.skills.tools(self.current)
         return start
 
     async def hand_mentioned(self, text: str) -> str:
         """Hand the user's words to the agent they name as they are, when the main agent's reply did not; what handing
         them over answers."""
         call_id = f"runtime-{uuid.uuid4().hex[:12]}"
-        handed = await self.handing[self.mention.agent].start(self.mention.title(text), text, [], [], call_id)
+        handed = await self.handing[self.mention.agent].start(self.mention.title(text), text, [], [], [], call_id)
         return handed.text if isinstance(handed, ToolMessage) else handed
 
     async def open_turn(self) -> Trajectory:

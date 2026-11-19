@@ -110,7 +110,7 @@ def test_openai_is_offered_the_hand_over_tools_and_left_to_choose_among_them(set
     assert "tool_choice" not in payload  # a message for the desktop is not forced (prompts.computer DESKTOP_ASKED)
     # Without a code runner, start_task offers only the computer agent.
     assert [each["name"] for each in payload["tools"]] == ["start_task", "tell_task", "stop_task"]
-    assert list(payload["tools"][0]["parameters"]["properties"]) == ["agent", "title", "task", "steps"]
+    assert list(payload["tools"][0]["parameters"]["properties"]) == ["agent", "title", "task", "steps", "skills"]
     assert payload["tools"][0]["parameters"]["properties"]["agent"]["enum"] == ["computer"]
     assert list(payload["tools"][2]["parameters"]["properties"]) == ["task_id"]
 

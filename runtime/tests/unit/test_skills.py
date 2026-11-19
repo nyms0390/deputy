@@ -105,7 +105,7 @@ async def test_the_computer_agent_is_told_its_skills_and_reads_one(settings, com
 @pytest.mark.usefixtures("the_log_is_the_whole_record")
 async def test_the_main_agent_is_told_its_skills_and_reads_one(settings, computer, monkeypatch, tmp_path):
     write_skill(tmp_path / "main", "planning", skill_text("planning"))
-    monkeypatch.setattr(main_agent, "SkillsMiddleware", lambda agent: SkillsMiddleware(agent, tmp_path))
+    monkeypatch.setattr(main_agent, "SkillsMiddleware", lambda agent, user: SkillsMiddleware(agent, tmp_path, user))
     _, main_model = use_script(monkeypatch, [], main=[
         reading("planning"),
         AIMessage("Planned."),
@@ -141,6 +141,7 @@ async def test_the_coding_agent_is_told_its_skills_and_reads_one(settings, compu
     assert isinstance(skill, ToolMessage) and skill.status == "success" and "How to python." in skill.text
 
 
-def test_the_desktop_skills_ship_with_the_computer_agent_alone():
+def test_the_desktop_skills_ship_with_the_computer_agent_and_skill_creation_with_the_main_agent():
     assert "windows" in SkillsMiddleware("computer").section and "pokemon-red" in SkillsMiddleware("computer").section
-    assert not SkillsMiddleware("main").section and not SkillsMiddleware("coding").section
+    assert "- skill-creator: " in SkillsMiddleware("main").section and "windows" not in SkillsMiddleware("main").section
+    assert not SkillsMiddleware("coding").section
