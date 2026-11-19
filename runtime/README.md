@@ -46,6 +46,13 @@ The web page is at <http://localhost:8080> and the API at <http://localhost:8000
 - **RDP sign-in refused:** the runtime stops trying, so the account is not locked. Fix `.env` and run `docker compose up -d runtime`.
 - **RDP certificate changed on purpose:** run `docker compose down` and `docker volume rm computer-use_rdp-certs`.
 
+### Behind a company proxy
+
+Networks that inspect HTTPS and refuse plain HTTP fail the build at `apt-get` or `bun install` (403, or certificate errors).
+
+- Put the company root certificate in the repository's `certs/` folder as a PEM `.crt` file. Every image trusts it while building and running.
+- Debian packages come over HTTPS by default. If the public sources are still refused, set `DEBIAN_MIRROR`, `PYPI_INDEX` or `NPM_REGISTRY` in `.env` to the company's mirrors, with the scheme (`https://...`).
+
 ### Windows machine
 
 Optional: Windows Tools v0.3.1, for `run_command`.

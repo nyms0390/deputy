@@ -3,7 +3,14 @@ name: computer-use
 
 services:
   runtime:
-    build: .
+    build:
+      context: .
+      # Company root certificates (README: Behind a company proxy); the folder may hold none.
+      additional_contexts:
+        company-ca: ../certs
+      args:
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-https://deb.debian.org}
+        PYPI_INDEX: ${PYPI_INDEX:-https://pypi.org/simple}
     image: computer-use:local
     init: true  # stops promptly: the entrypoint's shell is not PID 1
     restart: unless-stopped  # the container ends with its API, e.g. one that could not reach the database
@@ -51,7 +58,13 @@ services:
 
   # The web page, with /api passed on to the runtime.
   web:
-    build: ../clients/web
+    build:
+      context: ../clients/web
+      # Company root certificates (README: Behind a company proxy); the folder may hold none.
+      additional_contexts:
+        company-ca: ../certs
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
     image: computer-use-web:local
     restart: unless-stopped
     ports:
@@ -61,7 +74,14 @@ services:
   # Isolated code runner: no network, runtime files or secrets.
   # The shared socket carries requests; working folders live in memory.
   code-runner:
-    build: ../code-runner
+    build:
+      context: ../code-runner
+      # Company root certificates (README: Behind a company proxy); the folder may hold none.
+      additional_contexts:
+        company-ca: ../certs
+      args:
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-https://deb.debian.org}
+        PYPI_INDEX: ${PYPI_INDEX:-https://pypi.org/simple}
     image: computer-use-code-runner:local
     init: true
     read_only: true
