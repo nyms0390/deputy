@@ -294,10 +294,10 @@ WORKS = {
             "Leave void claims out of every count and sum.",
             "claim_count is the number of claims that are not void.",
             "total_amount is the sum of the claims that are not void, rounded half up to a whole number.",
-            "review_flag is Y when any claim that is not void is 1000 or more, and N otherwise. The total does not "
-            "decide it.",
-            "For approved_by, read the expense policy to its last page. When that page names someone standing in for "
-            "the approver in the period, give that person; otherwise give the approver on the first page.",
+            ("review_flag is Y when any claim that is not void is 1000 or more, and N otherwise. The total does not "
+            "decide it."),
+            ("For approved_by, read the expense policy to its last page. When that page names someone standing in for "
+            "the approver in the period, give that person; otherwise give the approver on the first page."),
             "Give null for payment_reference and any other value no file holds.",
         ),
         (
@@ -329,10 +329,10 @@ WORKS = {
             "branch_code is the branch of that account in the account list.",
             "Write received_date as DD/MM/YYYY.",
             "category is C2 when the letter is about a card, B1 when it is about a fee or charge, and G0 otherwise.",
-            "priority is P1 when the letter says it is urgent or names an amount over 500, and P3 otherwise. What the "
-            "letter is about does not decide it.",
-            "For escalation_contact, read the letter handbook to its last page. When that page names a new contact "
-            "for the account's region, give that person; otherwise give the region's contact on the first page.",
+            ("priority is P1 when the letter says it is urgent or names an amount over 500, and P3 otherwise. What the "
+            "letter is about does not decide it."),
+            ("For escalation_contact, read the letter handbook to its last page. When that page names a new contact "
+            "for the account's region, give that person; otherwise give the region's contact on the first page."),
             "Give null for case_reference and any other value no file holds.",
         ),
         (
