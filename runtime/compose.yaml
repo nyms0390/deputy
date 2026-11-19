@@ -10,6 +10,7 @@ services:
         company-ca: ../certs
       args:
         DEBIAN_MIRROR: ${DEBIAN_MIRROR:-https://deb.debian.org}
+        PYPI_INDEX: ${PYPI_INDEX:-https://pypi.org/simple}
     image: computer-use:local
     init: true  # stops promptly: the entrypoint's shell is not PID 1
     restart: unless-stopped  # the container ends with its API, e.g. one that could not reach the database

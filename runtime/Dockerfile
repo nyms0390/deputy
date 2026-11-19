@@ -5,8 +5,6 @@ FROM scratch AS company-ca
 
 FROM python:3.15-slim-trixie
 
-COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /bin/
-
 # Trusts the company certificates for the build and at run time (the model APIs), and fetches Debian over HTTPS from
 # DEBIAN_MIRROR: some networks refuse plain HTTP.
 ARG DEBIAN_MIRROR=https://deb.debian.org
@@ -14,7 +12,11 @@ COPY --from=company-ca / /usr/local/share/ca-certificates/company/
 RUN update-ca-certificates \
     && sed -i "s|http://deb.debian.org|${DEBIAN_MIRROR%/}|g" /etc/apt/sources.list.d/debian.sources
 # Python's TLS (httpx, uv, pip) reads the system store instead of its own bundle.
-ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    PIP_CERT=/etc/ssl/certs/ca-certificates.crt PIP_DISABLE_PIP_VERSION_CHECK=1
+# uv from the package index (PYPI_INDEX when set), not ghcr.io, which some networks refuse.
+ARG PYPI_INDEX=https://pypi.org/simple
+RUN pip install --no-cache-dir --index-url "${PYPI_INDEX}" uv==0.13.5
 
 # FreeRDP comes from backports: trixie's 3.15 doesn't tell Windows the clipboard changed when the new text has
 # the same formats as the last, so Windows pastes the old text (fixed in 3.27).
