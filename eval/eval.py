@@ -205,10 +205,11 @@ def stop_server() -> None:
 
 
 @contextlib.contextmanager
-def version_server(code: str):
+def version_server(code: str, env: dict[str, str] | None = None):
     """The runtime at a version, served on EVAL_PORT with the copy of runtime/src `install` put at `code`: the version
     the tasks run with, apart from the server the web page uses. Both share the container's data and its desktop
-    lock, so only one run uses the desktop at a time. `api` drives it until the block ends, which stops it."""
+    lock, so only one run uses the desktop at a time. `api` drives it until the block ends, which stops it. `env` is
+    settings of its own, on top of the container's."""
     global api
     served, before = Client(f"http://127.0.0.1:{EVAL_PORT}"), api
     with contextlib.suppress(ApiError):  # nothing answers there: nothing to stop
@@ -217,7 +218,7 @@ def version_server(code: str):
     stop_server()
     serve = f"echo $$ > {SERVER_PID}; exec python -m computer_use.serve --host 0.0.0.0 --port {EVAL_PORT} " \
             f">{SERVER_LOG} 2>&1"
-    compose("sh", "-c", serve, timeout=60, env={"PYTHONPATH": code}, detach=True)
+    compose("sh", "-c", serve, timeout=60, env={"PYTHONPATH": code} | (env or {}), detach=True)
     try:  # from here on, however this ends, the server stops
         deadline = time.monotonic() + SERVER_SECONDS
         while True:

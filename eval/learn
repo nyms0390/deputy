@@ -1,0 +1,4 @@
+#!/bin/sh
+# The learning experiment's command line, from anywhere: eval/learn generate OUT, ... (see README.md)
+here=$(cd "$(dirname "$0")" && pwd)
+PYTHONPATH="$here${PYTHONPATH:+:$PYTHONPATH}" exec "$here/../runtime/.venv/bin/python" -m learning "$@"
