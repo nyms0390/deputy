@@ -50,4 +50,4 @@ uv run --project clients/cli computer-use run "<goal>"
 - [Runtime](runtime/README.md): design, setup, agents, API and tests
 - [CLI](clients/cli/README.md): the command line
 - [Web](clients/web/README.md): front-end development
-- [Evaluation](eval/README.md): Windows tasks and result comparisons
+- [Evaluation](eval/README.md): Windows tasks, result comparisons and the learning experiment

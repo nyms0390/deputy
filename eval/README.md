@@ -1,6 +1,6 @@
 # Windows evaluation
 
-Run Windows desktop tasks through the runtime, grade the results by hand, and compare code versions or models. These tasks make real changes on the connected Windows test machine and call model APIs.
+Run Windows desktop tasks through the runtime, grade the results by hand, and compare code versions or models. These tasks make real changes on the connected Windows test machine and call model APIs. The [learning experiment](#learning-experiment) is apart from them and uses no desktop.
 
 ## Quick start
 
@@ -114,3 +114,74 @@ cd runtime
 - **Watch for a frozen screen**: after a reconnect the RDP client can keep showing an old frame (the taskbar clock
   stops). Kill `xfreerdp3` in the container and drop those runs.
 - **Keep the Mac awake** (`caffeinate -i -s`), or the connection drops mid-run.
+
+## Learning experiment
+
+A separate measurement from the Windows tasks: does a skill the agent made from worked cases change its answers on
+cases it never saw? It uses no desktop. `eval/learn` ([learning/](learning/)) drives it; every case is made-up data.
+
+`eval/learn generate OUT` writes two kinds of office work, `OUT/expenses` and `OUT/letters`. Each has 6 training
+cases and 6 held-out cases: a few attached files, and an answer of eight fields.
+
+| Field kind | What it is | What it shows |
+|---|---|---|
+| planted | follows a rule the task does not state and no file spells out | whether the rule was learned |
+| control | the task or the files say it outright | whether a skill costs anything |
+| absent | no file holds it; the right answer is null | whether a skill makes the agent invent values |
+
+One planted rule of each kind of work needs the last page of a PDF with more pages than a model is sent, so the agent
+reads it only through code and can stop at its first page, where the value looks settled. Which case meets which
+condition is fixed, so that no simpler rule than the planted one fits the training cases.
+
+### Arms
+
+An arm is the held-out cases run with one folder of skills. Run each arm at least three times.
+
+```bash
+eval/learn run OUT/expenses RUNS/baseline-1                                # no skill
+eval/learn run OUT/expenses RUNS/sham-1 --skills OUT/expenses/sham         # a skill that states no rule
+eval/learn run OUT/expenses RUNS/oracle-1 --skills OUT/expenses/oracle     # a skill that states every rule
+eval/learn teach OUT/expenses TAUGHT                                       # the agent makes a skill, case by case
+eval/learn run OUT/expenses RUNS/learned-1 --skills TAUGHT/after-06
+```
+
+`run` and `teach` each start the eval's server (port 8001) with the working tree's `runtime/src`, or `--version REF`,
+and a folder of skills of its own under `runtime/data/learning/` (`CU_SKILLS_DIR`), so a run sees those skills and no
+others. They call model APIs. A held-out run rejects any skill the agent proposes, since a later case would run with
+it; `arm.json` says which skills the cases saw and whether they changed.
+
+`teach` sends each training case with its right answer and asks for a skill, new or improved. It shows you each
+proposal: Enter approves it, and a reason rejects it. Reject one that copies a case's names or figures, contradicts
+the cases, or cannot be followed, and give no hint of the rules in your reason: what you type is taught, not learned.
+`TAUGHT/after-NN` is the skills folder after case NN, so `after-01`, `after-03` and `after-06` show how the skill
+grows. If you can, approve without having read `keys/`, `rules.json`, the oracle skill or `learning/cases.py`;
+otherwise note that you knew the rules.
+
+The oracle arm is the ceiling: a rule it misses is one the agent cannot apply even when told, not one learning
+missed. Score the baseline alone first: where it already reads the last page and gets that field right, the
+last-page criterion cannot pass.
+
+### Scoring
+
+```bash
+eval/learn score OUT/expenses --arm baseline=RUNS/baseline-1 --arm baseline=RUNS/baseline-2 \
+    --arm sham=RUNS/sham-1 --arm learned=RUNS/learned-1 --report expenses.md
+```
+
+Give `--arm NAME=FOLDER` once for each repeat. Fields are compared by code: text after trimming, joining spaces and
+ignoring case, numbers by value, and nothing else, so another date format is wrong. The learning worked for a kind
+of work only if all four criteria pass:
+
+1. On planted fields, the learned arm's worst repeat beats the best repeat of the baseline and the sham.
+2. On control fields, its worst repeat is not below the baseline's worst.
+3. It makes up values no more often than the baseline.
+4. On the last-page rule, its worst repeat reads that page and gets the field right more often than their best.
+   Reading the page shows in the run's log as text only that page holds.
+
+One taught skill shows whether that skill helps, not whether teaching works reliably: for that, teach twice more and
+score each skill's arms apart. Offline checks, which say nothing of how a real model does:
+
+```bash
+cd runtime
+.venv/bin/python -m pytest tests/unit/test_learning_experiment.py -q
+```
