@@ -1,4 +1,5 @@
-"""The API's routes for the desktop: screen, live view, control, and the answer to a step awaiting approval."""
+"""The API's routes for the desktop: screen, live view, control, and the answer to a step awaiting approval, which is
+a desktop step or the main agent's skill proposal (userskills)."""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict
@@ -18,10 +19,10 @@ ANSWERED_FROM = ("web", "cli")
 
 
 def desktop_routes(
-    computer: Computer, control: Control, share: ScreenShare, asked: ApprovalFile,
-    awaiting: Callable[[Request], Awaitable[Approval | None]],
+    computer: Computer, control: Control, share: ScreenShare,
+    awaiting: Callable[[Request], Awaitable[tuple[ApprovalFile, Approval] | None]],
 ) -> list[Route]:
-    """`awaiting` says which step the asker may answer, if the run with the desktop is theirs."""
+    """`awaiting` says which step the asker may answer, and where it waits, if its run is theirs."""
 
     async def screen(request: Request) -> Response:
         try:
@@ -50,7 +51,7 @@ def desktop_routes(
         if by not in ANSWERED_FROM:
             raise HTTPException(400, f"by must be one of {', '.join(ANSWERED_FROM)}")
         pending = await awaiting(request)
-        if pending is None or pending.id != id or not asked.decide(id, decision, note.strip(), by):
+        if pending is None or pending[1].id != id or not pending[0].decide(id, decision, note.strip(), by):
             return JSONResponse({"error": "this step is not awaiting approval"}, 409)
         return JSONResponse({"id": id, "decision": decision})
 

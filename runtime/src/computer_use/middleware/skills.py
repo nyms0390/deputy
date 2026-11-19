@@ -1,6 +1,8 @@
 """Skills: know-how an agent reads only when its work calls for it. An agent has them by carrying this middleware. Each
-is a folder holding a SKILL.md, whose frontmatter names and describes it, and any files its instructions point to, in
-the agent's own folder, computer_use/skills/<agent>. The agent's system prompt lists them; read_skill reads one."""
+is a folder holding a SKILL.md, whose frontmatter names and describes it, and any files its instructions point to. The
+built-in ones are in the agent's own folder, computer_use/skills/<agent>; the main agent also has the user's own
+(userskills), which it passes along with the work it hands over. The agent's system prompt lists them; read_skill
+reads one."""
 
 import re
 from dataclasses import dataclass
@@ -38,17 +40,31 @@ def parse(path: Path) -> tuple[dict, str]:
     return meta, text[match.end():].strip()
 
 
+def skill_at(path: Path) -> Skill:
+    """The skill a SKILL.md describes; ValueError unless its frontmatter names its folder and describes it."""
+    meta, _ = parse(path)
+    name, description = str(meta.get("name", "")).strip(), " ".join(str(meta.get("description", "")).split())
+    if name != path.parent.name or not description:
+        raise ValueError(f"{path}: the frontmatter needs the folder's name as name, and a description")
+    return Skill(name, description, path.parent)
+
+
 @cache
 def catalog(folder: Path) -> tuple[Skill, ...]:
     """The skills in `folder`, by name, read once: they are files of the runtime."""
-    skills = []
-    for path in sorted(folder.glob("*/SKILL.md")):
-        meta, _ = parse(path)
-        name, description = str(meta.get("name", "")).strip(), " ".join(str(meta.get("description", "")).split())
-        if name != path.parent.name or not description:
-            raise ValueError(f"{path}: the frontmatter needs the folder's name as name, and a description")
-        skills.append(Skill(name, description, path.parent))
-    return tuple(skills)
+    return tuple(skill_at(path) for path in sorted(folder.glob("*/SKILL.md")))
+
+
+def built_in() -> set[str]:
+    """Every built-in skill's name, of every agent: a user's skill takes none of them."""
+    return {skill.name for agent in SKILLS.iterdir() if agent.is_dir() for skill in catalog(agent)}
+
+
+def skills_of(agent: str, folder: Path = SKILLS, user: tuple[Skill, ...] = ()) -> tuple[Skill, ...]:
+    """An agent's built-in skills, then the user's `user` skills whose names those leave free."""
+    own = catalog(folder / agent)
+    taken = {skill.name for skill in own}
+    return own + tuple(skill for skill in user if skill.name not in taken)
 
 
 def read_skill_tool(skills: tuple[Skill, ...]) -> BaseTool:
@@ -79,12 +95,12 @@ def read_skill_tool(skills: tuple[Skill, ...]) -> BaseTool:
 
 
 class SkillsMiddleware(AgentMiddleware):
-    """An agent's skills: listed at the end of its system prompt, the same on every call so a model's cache of it
-    holds, and read with read_skill. Without skills it adds nothing."""
+    """An agent's skills, its built-in ones and the `user`'s given: listed at the end of its system prompt, the same
+    on every call so a model's cache of it holds, and read with read_skill. Without skills it adds nothing."""
 
-    def __init__(self, agent: str, folder: Path = SKILLS):
+    def __init__(self, agent: str, folder: Path = SKILLS, user: tuple[Skill, ...] = ()):
         super().__init__()
-        skills = catalog(folder / agent)
+        skills = skills_of(agent, folder, user)
         self.section = section((skill.name, skill.description) for skill in skills) if skills else ""
         self.tools = [read_skill_tool(skills)] if skills else []
 

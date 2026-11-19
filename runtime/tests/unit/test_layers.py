@@ -15,7 +15,7 @@ CORE = {
 OPTIONAL = (
     "agent.coding_agent", "agent.computer_agent", "agent.review", "computers", "desktop", "memory",
     "middleware.approvals", "middleware.desktop", "middleware.memory", "middleware.skills", "prompts.coding", "prompts.computer",
-    "prompts.memory", "prompts.review", "sandbox", "tools.coding", "tools.desktop",
+    "prompts.memory", "prompts.review", "sandbox", "tools.coding", "tools.desktop", "tools.skills", "userskills",
 )
 
 def imported(module: str) -> set[str]:

@@ -23,6 +23,7 @@ The API server and the agents reach everything outside the runtime through six i
 - **Windows Tools** (optional). The desktop agent can also run PowerShell with `run_command`. A running command stops when the user takes the desktop.
 - **Takeover.** The user takes the desktop from the web live view or `computer-use takeover`; the agent asks for it for passwords, CAPTCHAs, administrator prompts and payments.
 - **Approvals.** A step the agent flags waits for the user's approval; **Settings → Permissions** can send it to an auto reviewer first.
+- **Skills.** Instructions an agent reads when its work matches a skill's description. Built-in skills ship in `src/computer_use/skills/<agent>/`; each user's own are in `data/users/<user>/skills/<name>/SKILL.md` (`CU_SKILLS_DIR` points every user at one folder instead), also when runs are kept in MongoDB. The main agent lists both and passes a user's skill to a task by name. It writes one only with its built-in `skill-creator` skill and `propose_skill`: the user approves or declines the proposal like a flagged step (the web page, or `computer-use approve` / `reject`), and an approved change overwrites the skill's one `SKILL.md`. Skill proposals always ask the user; auto review does not answer them.
 - **Models.** Defaults come from `.env` (`CU_MAIN_MODEL`, `CU_COMPUTER_MODEL`); **Settings → Model** overrides them.
 
 ## Setup
@@ -75,7 +76,8 @@ runtime/
 │   ├── tools/            # What agents call
 │   ├── middleware/       # What runs around model and tool calls
 │   ├── prompts/          # Everything the agents are told
-│   ├── skills/           # Instructions an agent reads when needed, a folder for each agent
+│   ├── skills/           # Built-in instructions an agent reads when needed, a folder for each agent
+│   ├── userskills.py     # Each user's own skills, and their proposals awaiting approval
 │   ├── desktop/          # Screenshots, input and live view
 │   ├── computers/        # The desktop port and its RDP backend
 │   ├── native/           # Commands on Windows through the Windows Tools host

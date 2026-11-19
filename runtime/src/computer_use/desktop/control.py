@@ -161,11 +161,12 @@ class ApprovalFile:
         if approval is not None and approval.id == id:
             self.path.unlink(missing_ok=True)
 
-    async def wait(self, id: str, control: Control) -> Approval | None:
-        """Block until the user answers the step `id`; None if they take the desktop instead, which answers it too.
-        Nothing but an answer approves: no answer waits for ever, and a request gone missing reads as a rejection."""
+    async def wait(self, id: str, control: Control | None) -> Approval | None:
+        """Block until the user answers the step `id`; None if they take the desktop (`control`, for a step on it)
+        instead, which answers it too. Nothing but an answer approves: no answer waits for ever, and a request gone
+        missing reads as a rejection."""
         while True:
-            if control.read().owner == "user":
+            if control is not None and control.read().owner == "user":
                 return None
             approval = self.read()
             if approval is None or approval.id != id:

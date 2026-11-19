@@ -12,6 +12,7 @@ from computer_use.agent.background import MAX_TASKS, Background
 from computer_use.agent.inbox import Inbox
 from computer_use.prompts import notes
 from computer_use.prompts.main import AGENT, BRIEF, STEPS, TITLE, start_task
+from computer_use.prompts.skills import HAND
 from computer_use.storage import MAIN
 from computer_use.tools.common import CallId, not_executed
 
@@ -24,12 +25,12 @@ RULES = "The ids of the remembered rules that apply to this task, for its agent 
 @dataclass(frozen=True)
 class TaskTool:
     """An agent start_task hands tasks to: its name, its line in the tool's description, and what starts its task
-    (its title, the task, the ids of the rules it follows, the ids of the plan's steps it carries out and the call's id
-    in; the call's result out)."""
+    (its title, the task, the ids of the rules it follows, the names of the skills it follows, the ids of the plan's
+    steps it carries out and the call's id in; the call's result out)."""
 
     agent: str
     about: str
-    start: Callable[[str, str, list[str], list[str], str], Awaitable[str | ToolMessage]]
+    start: Callable[[str, str, list[str], list[str], list[str], str], Awaitable[str | ToolMessage]]
 
 
 def handover_tools(
@@ -92,10 +93,11 @@ def handover_tool(tasks: Sequence[TaskTool], *, with_rules: bool) -> BaseTool:
         task: Annotated[str, Field(description=BRIEF)],
         steps: Annotated[list[str] | None, Field(description=STEPS)] = None,
         rules: Rules = None,
+        skills: Annotated[list[str] | None, Field(description=HAND)] = None,
         *,
         call_id: CallId,
     ) -> str | ToolMessage:
-        return await starts[agent](title, task, rules or [], steps or [], call_id)
+        return await starts[agent](title, task, rules or [], skills or [], steps or [], call_id)
 
     description = start_task(MAX_TASKS, [(each.agent, each.about) for each in tasks])
     return tool(START_TASK, description=description)(hand_task)

@@ -1237,6 +1237,30 @@ async def test_a_step_awaiting_approval_shows_in_the_status_and_is_answered_from
     assert (decision["outcome"], decision["by"]) == ("approved", "cli")
 
 
+async def test_a_skill_proposal_shows_in_the_status_and_is_answered_as_a_step_is(
+    client, settings, monkeypatch, fast_polls
+):
+    proposal = {"name": "invoices", "description": "Invoices.", "instructions": "Total last."}
+    use_script(monkeypatch, [], main=[
+        AIMessage(content="", tool_calls=[{"id": "p1", "name": "propose_skill", "args": proposal, "type": "tool_call"}]),
+        AIMessage("Saved."),
+    ])
+    await client.post("/api/runs", json={"goal": "save it as a skill"})
+    for _ in range(500):
+        if approval := (await client.get("/api/status")).json()["approval"]:
+            break
+        await asyncio.sleep(0.01)
+
+    turn = (await client.get("/api/status")).json()["running"][0]["turn"]  # asked from the main agent's turn
+    assert (approval["id"], approval["run"], approval["tool"]) == ("p1", turn, "propose_skill")
+    assert approval["consequence"] == "save a new skill invoices: Invoices."
+    answered = await client.post("/api/approval", json={"id": "p1", "decision": "approve", "by": "cli"})
+    assert answered.status_code == 200
+
+    assert (await until_idle(client))["approval"] is None
+    assert (settings.skills_folder("local") / "invoices" / "SKILL.md").is_file()
+
+
 async def test_the_status_keeps_no_users_choices_and_says_how_the_settings_start_them(client, settings):
     settings.openai_api_key, settings.anthropic_api_key = SecretStr("sk-offline"), None
     status = (await client.get("/api/status")).json()

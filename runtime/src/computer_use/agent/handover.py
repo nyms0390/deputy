@@ -8,6 +8,7 @@ from typing import Protocol
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
+from langchain_core.tools import BaseTool
 
 from computer_use.agent.background import MAX_TASKS, Background, Resource
 from computer_use.agent.inbox import Inbox
@@ -29,6 +30,13 @@ class Handed:
     rules: Sequence[dict[str, str]] = ()
 
 
+class SessionSkills(Protocol):
+    """The main agent's skills, as far as its hand-overs and tools need."""
+
+    def hand(self, names: list[str]) -> str: ...  # their instructions, for a task's agent; LookupError for one unknown
+    def tools(self, turn: Callable[[], Trajectory]) -> list[BaseTool]: ...  # the main agent's, in the turn under way
+
+
 class SessionMemory(Protocol):
     """What a session remembers for its user, as far as its agents need."""
 
@@ -40,17 +48,27 @@ class SessionMemory(Protocol):
 def task_tool(
     kind: type[Subagent], make: MakeAgent, background: Background, user: Inbox, turn: Callable[[], Trajectory],
     session: str, thread: str, memory: SessionMemory | None = None, resource: Resource | None = None,
+    skills: SessionSkills | None = None,
 ) -> TaskTool:
     """`kind`'s part of start_task. Tasks that need a `resource` run one at a time and hold it, under their log's name,
-    until they end. `memory` supplies the remembered rules a task is handed over with, by id."""
+    until they end. `memory` supplies the remembered rules a task is handed over with, by id; `skills` the
+    instructions of the skills it is handed over with, by name."""
 
-    async def start(title: str, task: str, rules: list[str], steps: list[str], call_id: str) -> str | ToolMessage:
+    async def start(
+        title: str, task: str, rules: list[str], named: list[str], steps: list[str], call_id: str,
+    ) -> str | ToolMessage:
         # One hand-over at a time: what refuses one is decided before its log exists, as the one before left things.
         async with background.starting:
-            return await begin(title, task, rules, steps, call_id)
+            return await begin(title, task, rules, named, steps, call_id)
 
-    async def begin(title: str, task: str, rules: list[str], steps: list[str], call_id: str) -> str | ToolMessage:
+    async def begin(
+        title: str, task: str, rules: list[str], named: list[str], steps: list[str], call_id: str,
+    ) -> str | ToolMessage:
         call = {"id": call_id, "name": START_TASK}
+        try:
+            following = skills.hand(named) if skills is not None and named else ""
+        except LookupError as unknown:  # a name it was not told, or one deleted since
+            return ToolMessage(str(unknown.args[0]), tool_call_id=call_id, name=START_TASK, status="error")
         if resource is not None and (using := background.working(kind.agent)) is not None:
             return not_executed(call, *resource.in_use(using.id))
         if background.full:
@@ -66,7 +84,7 @@ def task_tool(
         if resource is not None:
             resource.taken_by(log.run)
 
-        worker = make(log, handed.text)
+        worker = make(log, "\n\n".join(part for part in (handed.text, following) if part))
 
         async def work(id: str, told: Inbox):
             worker.task_id = id

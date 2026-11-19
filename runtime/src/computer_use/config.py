@@ -1,5 +1,6 @@
 """Runtime settings, read from environment variables or `.env`; and the choices a user sends with each run."""
 
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -7,6 +8,9 @@ from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# A user's id as a folder's name, as the memory files take it (memory.NAME).
+USER = re.compile(r"[0-9a-z]{1,64}")
 
 
 class Settings(BaseSettings):
@@ -33,6 +37,9 @@ class Settings(BaseSettings):
     auth_proxies: str = "127.0.0.1/32,::1/128"
 
     data_dir: Path = Path("data")
+    # Users' own skills, a folder each: empty for data_dir/users/<user>/skills. When set, the folder holds every user's
+    # skills, so a server can run against a copy of one set, as an experiment's arm does.
+    skills_dir: Path | None = None
     # Runs, projects and memories: empty for files under data_dir, else a database URL whose scheme picks the store.
     database_url: str = ""
     # Shared-volume Unix socket; no coding agent when unset. While it is unreachable, coding tasks fail at once.
@@ -58,6 +65,11 @@ class Settings(BaseSettings):
         database_of(url)
         return url
 
+    @field_validator("skills_dir", mode="before")
+    @classmethod
+    def _unset_if_empty(cls, folder):
+        return folder or None
+
     @property
     def database(self) -> "Database | None":
         return database_of(self.database_url)
@@ -73,6 +85,19 @@ class Settings(BaseSettings):
     @property
     def approval_path(self) -> Path:
         return self.data_dir / "approval.json"
+
+    def skills_folder(self, user: str) -> Path:
+        """Where `user`'s own skills are (userskills)."""
+        return self.skills_dir if self.skills_dir is not None else self._user_folder(user) / "skills"
+
+    def proposals_folder(self, user: str) -> Path:
+        """Where `user`'s skill proposals wait for their answer."""
+        return self._user_folder(user) / "skill-proposals"
+
+    def _user_folder(self, user: str) -> Path:
+        if not USER.fullmatch(user):
+            raise ValueError(f"not a user id: {user!r}")
+        return self.data_dir / "users" / user
 
 
 Database = Literal["mongodb"]
